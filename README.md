@@ -17,13 +17,32 @@ This plugin sets the variable per session from the agent's working directory.
 
 ## Behavior
 
-One `server.before("agent.session_open")` hook sets:
+One `server.before("agent.session_open")` hook sets `OTEL_RESOURCE_ATTRIBUTES` for the session.
+Claude Code puts every pair on each metric datapoint, event record and span:
 
-```
-OTEL_RESOURCE_ATTRIBUTES=service.instance.id=<instance>,project=<tag>
-```
+| Attribute | Value | Omitted when |
+| --- | --- | --- |
+| `service.instance.id` | override env var, or the machine name | never |
+| `host.name` | stable machine name | never |
+| `host.id` | hardware id, `IOPlatformUUID` or `/etc/machine-id` | platform exposes none |
+| `project` | working directory tag, see below | never |
+| `project.name` | Paseo project display name | no workspace |
+| `project.kind` | `git`, `non_git` or `directory` | no workspace |
+| `paseo.agent_id` | Paseo agent UUID | never |
+| `paseo.provider` | `claude`, `codex`, ... | never |
+| `paseo.session_reason` | `create`, `resume`, `refresh` or `import` | never |
+| `paseo.workspace_kind` | `worktree`, `directory`, `checkout` or `local_checkout` | no workspace |
+| `vcs.ref.head.name` | current branch | non-git project |
 
-The tag is the working directory relative to `$HOME`:
+`paseo.agent_id` is the field that links a Claude `session.id` to the Paseo agent that ran it.
+Nothing in either system bridges those identifiers otherwise.
+
+Claude Code keeps its own value on a collision, so none of these can shadow a built-in
+attribute. `vcs.ref.head.name` is a key Claude Code reserves and does not populate, and a probe
+confirmed the plugin's value arrives intact next to the `vcs.*` set that
+`OTEL_METRICS_INCLUDE_REPOSITORY` produces.
+
+The `project` tag is the working directory relative to `$HOME`:
 
 | cwd | tag |
 | --- | --- |
@@ -54,6 +73,29 @@ call fails, so a daemon hiccup degrades the label rather than blocking the sessi
 `docs/paseo-metadata.md` records every field that object exposes, with notes on which ones are
 worth adding as further telemetry attributes.
 
+## Configuration
+
+`PASEO_OTEL_SERVICE_INSTANCE_ID` overrides `service.instance.id`. `OTEL_SERVICE_INSTANCE_ID` works
+too and is the name the shell counterpart reads, so one export covers both. Set it when a host runs
+several daemons, or when the machine name is not the label you want in dashboards.
+
+Both are read from the daemon's own environment rather than from a shell. A daemon started by the
+desktop app inherits the GUI session environment, so exporting the variable in a terminal does not
+reach it. Set it in the service definition that launches the daemon.
+
+### Machine identity
+
+`service.instance.id` defaults to the machine name, and `host.name` always carries it.
+
+`os.hostname()` is not stable on macOS. A DHCP server that supplies a host name sets the system
+HostName and the hostname follows it, so the same laptop reports one name at home and another on a
+corporate network. The plugin reads `scutil --get LocalHostName` first, which comes from the Sharing
+settings panel and ignores DHCP, and drops a trailing `.local` either way. Linux and the BSDs read
+the hostname from local configuration, so `os.hostname()` is used there.
+
+`host.id` carries a hardware identifier that no network change can affect: `IOPlatformUUID` on
+macOS, `/etc/machine-id` on Linux. Group by that when a name has drifted on you before.
+
 ## Install
 
 ```bash
@@ -72,29 +114,23 @@ plugin's value is then ignored.
 
 ## Matching terminal sessions
 
-Sessions started from a shell need the same tag computed there. This zsh function produces
-output identical to the plugin:
+Paseo execs the agent binary from its daemon, so this plugin never sees a session you start by
+typing `claude` in a terminal. `shell/claude-otel-tag.zsh` is the counterpart for those: a zsh
+function that sets the same `project`, `host.name`, `host.id`, `service.instance.id` and
+`vcs.ref.head.name` from the shell. Source it from your zsh configuration.
 
-```zsh
-_claude_project_tag() {
-  local d="$PWD"
-  if [[ "$d" == "$HOME" ]]; then d="home"
-  elif [[ "$d" == "$HOME"/* ]]; then d="${d#$HOME/}"
-  else d="${d#/}"; fi
-  print -r -- "${d//[^A-Za-z0-9._\/-]/_}"
-}
-
-claude() {
-  OTEL_RESOURCE_ATTRIBUTES="service.instance.id=claude-code-mac,project=$(_claude_project_tag)" command claude "$@"
-}
-```
+It cannot set `project.name`, `project.kind` or the `paseo.*` attributes, since a shell launch has
+no agent or workspace behind it. Everything else matches, so the same directory produces the same
+project label either way.
 
 ## Caveats
 
 - The hook runs when a session opens. Agents already running keep their old environment
   until they restart or resume.
-- `service.instance.id` is hardcoded to `claude-code-mac` in `server/project-tag.ts`.
-  Change it before running this on another machine.
+- `paseo.agent_id` is one label value per agent. On a metrics backend that charges for series,
+  this is the expensive attribute. `OTEL_METRICS_INCLUDE_RESOURCE_ATTRIBUTES=false` keeps custom
+  attributes in the OTLP resource block and off datapoint labels, which we have not measured.
+  Dropping the line from `server/attributes.ts` is the other option.
 - Each distinct directory is its own label value, so scratch directories add cardinality.
   Worktrees do not, since they resolve to their project root.
 - Non-ASCII collapses to `_`, so two directories differing only in an umlaut end up merged.
@@ -103,8 +139,15 @@ claude() {
 
 ```bash
 npm install
+npm test          # unit tests for the attribute builder
 npm run typecheck
 paseo plugin install "$PWD"
 paseo plugin reload paseo-otel-project-tag
 paseo plugin logs paseo-otel-project-tag
 ```
+
+The tests cover `server/attributes.ts`, which is pure. Anything touching the daemon is verified by
+launching a throwaway agent and reading `paseo plugin logs`, which is also how
+`docs/paseo-metadata.md` was written.
+
+MIT licensed.

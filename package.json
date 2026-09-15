@@ -3,11 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
   },
   "devDependencies": {
     "@getpaseo/plugin": "0.8.0",
     "typescript": "^5.9.3",
     "@types/node": "^22.10.0"
+  },
+  "type": "module",
+  "description": "Paseo plugin that tags Claude Code telemetry with the project an agent runs in",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tenex-hq/paseo-otel-tag.git"
   }
 }

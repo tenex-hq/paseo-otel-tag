@@ -1,8 +1,8 @@
 # Paseo metadata available to this plugin
 
 Captured from a `before("agent.session_open")` hook on Paseo 0.8.0 by logging
-`JSON.stringify` of each object, then reading `paseo plugin logs`. Values below are real,
-from a session in a `local_checkout` workspace. Field names in the SDK differ from what
+`JSON.stringify` of each object, then reading `paseo plugin logs`. The samples below keep the
+real shape of a session in a `local_checkout` workspace with identifiers and paths replaced. Field names in the SDK differ from what
 `paseo project ls --json` and `paseo workspace ls --json` print, so trust this file over the
 CLI output.
 
@@ -12,10 +12,10 @@ CLI output.
 
 ```json
 {
-  "agentId": "2614437f-fad7-4357-b79e-8cfa901299a2",
-  "workspaceId": "wks_66080ded1ddee40a",
+  "agentId": "11111111-2222-3333-4444-555555555555",
+  "workspaceId": "wks_0000000000000001",
   "provider": "claude",
-  "cwd": "/Users/nbi/.config/nix-darwin",
+  "cwd": "/home/you/code/dotfiles",
   "reason": "create",
   "purpose": "interactive",
   "env": {}
@@ -36,33 +36,33 @@ reach the project:
 
 ```json
 {
-  "id": "wks_66080ded1ddee40a",
-  "projectId": "prj_9a7d49f2aa19758e",
-  "projectDisplayName": "nix-darwin",
+  "id": "wks_0000000000000001",
+  "projectId": "prj_0000000000000001",
+  "projectDisplayName": "dotfiles",
   "projectCustomName": null,
   "projectCustomIconRevision": null,
-  "projectRootPath": "/Users/nbi/.config/nix-darwin",
-  "workspaceDirectory": "/Users/nbi/.config/nix-darwin",
+  "projectRootPath": "/home/you/code/dotfiles",
+  "workspaceDirectory": "/home/you/code/dotfiles",
   "projectKind": "git",
   "workspaceKind": "local_checkout",
-  "name": "Centralize Claude telemetry configuration",
-  "title": "Centralize Claude telemetry configuration",
+  "name": "Add request tracing",
+  "title": "Add request tracing",
   "pinnedAt": null,
   "archivingAt": null,
   "status": "running",
-  "statusEnteredAt": "2026-09-15T13:54:32.802Z",
+  "statusEnteredAt": "2026-01-01T00:00:00.000Z",
   "activityAt": null,
   "diffStat": null,
   "scripts": [],
   "project": {
-    "projectKey": "prj_9a7d49f2aa19758e",
-    "projectName": "nix-darwin",
-    "workspaceName": "Centralize Claude telemetry configuration",
+    "projectKey": "prj_0000000000000001",
+    "projectName": "dotfiles",
+    "workspaceName": "Add request tracing",
     "checkout": {
-      "cwd": "/Users/nbi/.config/nix-darwin",
+      "cwd": "/home/you/code/dotfiles",
       "currentBranch": "main",
       "remoteUrl": null,
-      "worktreeRoot": "/Users/nbi/.config/nix-darwin",
+      "worktreeRoot": "/home/you/code/dotfiles",
       "isGit": true,
       "isPaseoOwnedWorktree": false,
       "mainRepoRoot": null
@@ -93,13 +93,13 @@ repository the worktree came from.
 
 ```json
 {
-  "projectId": "prj_1ae8e49446d306ea",
-  "projectKey": "remote:github.com/nicolasbissig/homelab",
-  "projectDisplayName": "homelab",
+  "projectId": "prj_0000000000000002",
+  "projectKey": "remote:github.com/example-org/example-app",
+  "projectDisplayName": "example-app",
   "projectCustomName": null,
   "projectCustomIconRevision": null,
   "projectIconRevision": "automatic:none:v1",
-  "projectRootPath": "/Users/nbi/projects/private/homelab",
+  "projectRootPath": "/home/you/code/example-app",
   "projectKind": "git"
 }
 ```
@@ -107,21 +107,23 @@ repository the worktree came from.
 `projectKey` is the stable identity across machines: `remote:<host>/<owner>/<repo>` for a
 project with a remote, `host:<serverId>:<absolute path>` for one without.
 
-## Candidates for more telemetry attributes
+## Telemetry attributes
 
-Everything above is reachable in the hook that already sets `OTEL_RESOURCE_ATTRIBUTES`, so
-adding an attribute costs one more `key=value` pair. Values may not contain spaces, commas,
-quotes or backslashes, so anything free-text needs the same sanitizing as the project tag.
+Everything above is reachable in the hook that sets `OTEL_RESOURCE_ATTRIBUTES`, so adding an
+attribute costs one more `key=value` pair. Values may not contain spaces, commas, quotes or
+backslashes, so anything free-text needs the same sanitizing as the project tag.
+
+The rows marked **emitted** are live in `server/attributes.ts`.
 
 | Attribute | Source | Cardinality | Notes |
 | --- | --- | --- | --- |
-| `paseo.agent_id` | `request.agentId` | one per agent | Links a Claude `session.id` to the Paseo agent that ran it. The strongest reason to add a field. |
-| `paseo.provider` | `request.provider` | a handful | Separates Claude usage from Codex and the rest. |
-| `paseo.session_reason` | `request.reason` | four values | Distinguishes a fresh agent from a resume, which otherwise look identical in cost data. |
-| `paseo.workspace_kind` | `workspace.workspaceKind` | four values | Tells worktree runs apart from checkouts. |
-| `project.kind` | `workspace.projectKind` | three values | Marks the multi-repo directories that have no git identity. |
-| `project.name` | `workspace.projectDisplayName` | one per project | Readable label next to the path-derived tag. |
-| `vcs.ref.head.name` | `gitRuntime.currentBranch` | one per branch | Claude Code has this key reserved but does not emit it. |
+| `paseo.agent_id` **emitted** | `request.agentId` | one per agent | Links a Claude `session.id` to the Paseo agent that ran it. The strongest reason to add a field. |
+| `paseo.provider` **emitted** | `request.provider` | a handful | Separates Claude usage from Codex and the rest. |
+| `paseo.session_reason` **emitted** | `request.reason` | four values | Distinguishes a fresh agent from a resume, which otherwise look identical in cost data. |
+| `paseo.workspace_kind` **emitted** | `workspace.workspaceKind` | four values | Tells worktree runs apart from checkouts. |
+| `project.kind` **emitted** | `workspace.projectKind` | three values | Marks the multi-repo directories that have no git identity. |
+| `project.name` **emitted** | `workspace.projectDisplayName` | one per project | Readable label next to the path-derived tag. |
+| `vcs.ref.head.name` **emitted** | `gitRuntime.currentBranch` | one per branch | Claude Code reserves this key and leaves it empty. A probe confirmed the plugin's value arrives intact. |
 | `paseo.pr` | `githubRuntime.pullRequest` | one per PR | Only populated when GitHub features are on. It was `null` here. |
 
 Not worth attaching: `workspace.name` and `title` are model-generated prose, unbounded and
