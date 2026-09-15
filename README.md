@@ -37,6 +37,20 @@ and quotes in attribute values. Forward slashes are legal and stay.
 
 An `OTEL_RESOURCE_ATTRIBUTES` already present in the launch environment is left alone.
 
+### Worktree workspaces
+
+A Paseo worktree workspace runs in `~/.paseo/worktrees/<slug>/<name>`, a path that says nothing
+about where it branched from. Tagging that directly would scatter one project across a new label
+per branch.
+
+The hook asks the daemon instead: it refreshes the session's workspace, reads its `projectId`, and
+takes `projectRootPath` from `paseo.projects.list()`. An agent in a worktree off `~/.config/nix-darwin`
+is tagged `project=.config/nix-darwin`, the same as an agent running in the checkout itself.
+
+The lookup falls back to the session's own `cwd` when the workspace has no project, when the project
+is missing from the list, or when either call fails, so a daemon hiccup degrades the label rather
+than blocking the session.
+
 ## Install
 
 ```bash
@@ -78,8 +92,8 @@ claude() {
   until they restart or resume.
 - `service.instance.id` is hardcoded to `claude-code-mac` in `server/project-tag.ts`.
   Change it before running this on another machine.
-- Each distinct directory is its own label value, so worktrees and scratch directories add
-  cardinality.
+- Each distinct directory is its own label value, so scratch directories add cardinality.
+  Worktrees do not, since they resolve to their project root.
 - Non-ASCII collapses to `_`, so two directories differing only in an umlaut end up merged.
 
 ## Development
