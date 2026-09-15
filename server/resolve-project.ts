@@ -6,8 +6,10 @@ type PaseoApi = PluginHookContext["paseo"];
  * Directory a session should be attributed to.
  *
  * A Paseo worktree workspace runs in ~/.paseo/worktrees/<slug>/<name>, which says
- * nothing about the project it branched from. The workspace knows its project, so
- * prefer the project's root directory and fall back to the session's own cwd.
+ * nothing about the project it branched from. The workspace carries its project's
+ * root path, so prefer that and fall back to the session's own cwd.
+ *
+ * See docs/paseo-metadata.md for everything else this object exposes.
  */
 export async function resolveProjectDirectory(
   paseo: PaseoApi,
@@ -17,12 +19,7 @@ export async function resolveProjectDirectory(
   if (!workspaceId) return cwd;
   try {
     const workspace = await paseo.workspaces.ref(workspaceId).refresh();
-    const projectId = workspace?.projectId;
-    if (!projectId) return cwd;
-
-    const { projects } = await paseo.projects.list();
-    const project = projects.find((candidate) => candidate.projectId === projectId);
-    return project?.projectRootPath ?? cwd;
+    return workspace?.projectRootPath ?? cwd;
   } catch {
     return cwd;
   }

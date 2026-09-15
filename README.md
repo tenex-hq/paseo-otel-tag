@@ -43,13 +43,16 @@ A Paseo worktree workspace runs in `~/.paseo/worktrees/<slug>/<name>`, a path th
 about where it branched from. Tagging that directly would scatter one project across a new label
 per branch.
 
-The hook asks the daemon instead: it refreshes the session's workspace, reads its `projectId`, and
-takes `projectRootPath` from `paseo.projects.list()`. An agent in a worktree off `~/.config/nix-darwin`
-is tagged `project=.config/nix-darwin`, the same as an agent running in the checkout itself.
+The hook asks the daemon instead. It refreshes the session's workspace and reads
+`projectRootPath`, which stays on the project even when the session runs in a worktree. An agent
+in a worktree off `~/.config/nix-darwin` is tagged `project=.config/nix-darwin`, the same as an
+agent running in the checkout itself.
 
-The lookup falls back to the session's own `cwd` when the workspace has no project, when the project
-is missing from the list, or when either call fails, so a daemon hiccup degrades the label rather
-than blocking the session.
+The lookup falls back to the session's own `cwd` when the workspace carries no project root or the
+call fails, so a daemon hiccup degrades the label rather than blocking the session.
+
+`docs/paseo-metadata.md` records every field that object exposes, with notes on which ones are
+worth adding as further telemetry attributes.
 
 ## Install
 
